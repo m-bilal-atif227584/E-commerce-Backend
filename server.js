@@ -8,6 +8,11 @@ cloudinary.config({
     api_secret:process.env.CLOUDINARY_CLIENT_SECRET,
 })
 
+app.get("/", (req, res) => {
+  res.send("E-commerce backend deployed successfully 🚀");
+});
+
+
 app.listen(process.env.PORT, () => {
     console.log(`Server in running on PoRt ${process.env.PORT}`);
     
