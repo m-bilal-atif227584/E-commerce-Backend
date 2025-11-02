@@ -11,7 +11,7 @@ export const getAllUsers = catchAsyncErrors(async (req, res, next) => {
     ["User"]
   );
 
-  const totalUsers = parseInt(totalUsersResult.rows[0].count);
+  const totalUsers = parseInt(totalUsersResult[0].count);
 
   const offset = (page - 1) * 10;
 
@@ -23,7 +23,7 @@ export const getAllUsers = catchAsyncErrors(async (req, res, next) => {
     success: true,
     totalUsers,
     currentPage: page,
-    users: users.rows,
+    users: users,
   });
 });
 
@@ -35,11 +35,11 @@ export const deleteUser = catchAsyncErrors(async (req, res, next) => {
     [id]
   );
 
-  if (deleteUser.rows.length === 0) {
+  if (deleteUser.length === 0) {
     return next(new ErrorHandler("User not found", 404));
   }
 
-  const avatar = deleteUser.rows[0].avatar;
+  const avatar = deleteUser[0].avatar;
   if (avatar?.public_id) {
     await cloudinary.uploader.destroy(avatar.public_id);
   }
@@ -76,13 +76,13 @@ export const dashboardStats = catchAsyncErrors(async (req, res, next) => {
     SELECT SUM(total_price) FROM orders WHERE paid_at IS NOT NULL    
     `);
   const totalRevenueAllTime =
-    parseFloat(totalRevenueAllTimeQuery.rows[0].sum) || 0;
+    parseFloat(totalRevenueAllTimeQuery[0].sum) || 0;
 
   // Total Users
   const totalUsersCountQuery = await database.query(`
     SELECT COUNT(*) FROM users WHERE role = 'User'`);
 
-  const totalUsersCount = parseInt(totalUsersCountQuery.rows[0].count) || 0;
+  const totalUsersCount = parseInt(totalUsersCountQuery[0].count) || 0;
 
   // Order Status Counts
   const orderStatusCountsQuery = await database.query(`
@@ -95,7 +95,7 @@ export const dashboardStats = catchAsyncErrors(async (req, res, next) => {
     Delivered: 0,
     Cancelled: 0,
   };
-  orderStatusCountsQuery.rows.forEach((row) => {
+  orderStatusCountsQuery.forEach((row) => {
     orderStatusCounts[row.order_status] = parseInt(row.count);
   });
 
@@ -106,7 +106,7 @@ export const dashboardStats = catchAsyncErrors(async (req, res, next) => {
     `,
     [todayDate]
   );
-  const todayRevenue = parseFloat(todayRevenueQuery.rows[0].sum) || 0;
+  const todayRevenue = parseFloat(todayRevenueQuery[0].sum) || 0;
 
   // Yesterday's Revenue
   const yesterdayRevenueQuery = await database.query(
@@ -115,7 +115,7 @@ export const dashboardStats = catchAsyncErrors(async (req, res, next) => {
     `,
     [yesterdayDate]
   );
-  const yesterdayRevenue = parseFloat(yesterdayRevenueQuery.rows[0].sum) || 0;
+  const yesterdayRevenue = parseFloat(yesterdayRevenueQuery[0].sum) || 0;
 
   //Monthly Sales For Line Chart
   const monthlySalesQuery = await database.query(`
@@ -128,7 +128,7 @@ export const dashboardStats = catchAsyncErrors(async (req, res, next) => {
     ORDER BY date ASC
     `);
 
-  const monthlySales = monthlySalesQuery.rows.map((row) => ({
+  const monthlySales = monthlySalesQuery.map((row) => ({
     month: row.month,
     totalsales: parseFloat(row.totalsales) || 0,
   }));
@@ -149,7 +149,7 @@ export const dashboardStats = catchAsyncErrors(async (req, res, next) => {
     LIMIT 5
   `);
 
-  const topSellingProducts = topSellingProductsQuery.rows;
+  const topSellingProducts = topSellingProductsQuery;
 
   // Total Sales of Current Month
   const currentMonthSalesQuery = await database.query(
@@ -162,14 +162,14 @@ export const dashboardStats = catchAsyncErrors(async (req, res, next) => {
   );
 
   const currentMonthSales =
-    parseFloat(currentMonthSalesQuery.rows[0].total) || 0;
+    parseFloat(currentMonthSalesQuery[0].total) || 0;
 
   // Products with stock less than or equal to 5
   const lowStockProductsQuery = await database.query(`
         SELECT name, stock FROM products WHERE stock <= 5 
       `);
 
-  const lowStockProducts = lowStockProductsQuery.rows;
+  const lowStockProducts = lowStockProductsQuery;
 
   // Revenue Growth Rate (%)
   const lastMonthRevenueQuery = await database.query(
@@ -181,7 +181,7 @@ export const dashboardStats = catchAsyncErrors(async (req, res, next) => {
     [previousMonthStart, previousMonthEnd]
   );
 
-  const lastMonthRevenue = parseFloat(lastMonthRevenueQuery.rows[0].total) || 0;
+  const lastMonthRevenue = parseFloat(lastMonthRevenueQuery[0].total) || 0;
 
   let revenueGrowth = "0%";
 
@@ -199,7 +199,7 @@ export const dashboardStats = catchAsyncErrors(async (req, res, next) => {
     [currentMonthStart]
   );
 
-  const newUsersThisMonth = parseInt(newUsersThisMonthQuery.rows[0].count) || 0;
+  const newUsersThisMonth = parseInt(newUsersThisMonthQuery[0].count) || 0;
 
   // FINAL RESPONSE
   res.status(200).json({

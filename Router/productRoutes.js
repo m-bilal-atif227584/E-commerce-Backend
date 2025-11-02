@@ -31,7 +31,7 @@ productRouter.put(
   isAuthenticated,
   authorizedRoles("Admin"),
   updateProduct
-);
+); 
 productRouter.delete(
   "/admin/delete/:productId",
   isAuthenticated,

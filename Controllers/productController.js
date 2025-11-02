@@ -105,13 +105,18 @@ export const fetchAllProducts = catchAsyncErrors(async (req, res, next) => {
   }
 
   // Add search query
+  // if (search) {
+  //   conditions.push(
+  //     `(p.name ILIKE $${index} OR p.description ILIKE $${index})`
+  //   );
+  //   values.push(`%${search}%`);
+  //   index++;
+  // }
   if (search) {
-    conditions.push(
-      `(p.name ILIKE $${index} OR p.description ILIKE $${index})`
-    );
-    values.push(`%${search}%`);
-    index++;
-  }
+  conditions.push(`(p.name ILIKE $${index} OR p.description ILIKE $${index + 1})`);
+  values.push(`%${search}%`, `%${search}%`);
+  index += 2;
+}
 
   const whereClause = conditions.length
     ? `WHERE ${conditions.join(" AND ")}`
@@ -255,6 +260,7 @@ export const fetchSingleProduct = catchAsyncErrors(async (req, res, next) => {
             'review_id', r.id,
             'rating', r.rating,
             'comment', r.comment,
+            'created_at', r.created_at,
             'reviewer', json_build_object(
             'id', u.id,
             'name', u.name,
@@ -282,14 +288,22 @@ export const postProductReview = catchAsyncErrors(async (req, res, next) => {
   if (!rating || !comment) {
     return next(new ErrorHandler("Please provide rating and comment.", 400));
   }
+  // const purchasheCheckQuery = `
+  //   SELECT oi.product_id
+  //   FROM order_items oi
+  //   JOIN orders o ON o.id = oi.order_id
+  //   JOIN payments p ON p.order_id = o.id
+  //   WHERE o.buyer_id = $1
+  //   AND oi.product_id = $2
+  //   AND p.payment_status = 'Paid'
+  //   LIMIT 1 
+  // `;
   const purchasheCheckQuery = `
     SELECT oi.product_id
     FROM order_items oi
     JOIN orders o ON o.id = oi.order_id
-    JOIN payments p ON p.order_id = o.id
     WHERE o.buyer_id = $1
     AND oi.product_id = $2
-    AND p.payment_status = 'Paid'
     LIMIT 1 
   `;
 

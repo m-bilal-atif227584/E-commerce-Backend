@@ -1,7 +1,9 @@
 import ErrorHandler from "../Middlewares/errorMiddleware.js";
 import { catchAsyncErrors } from "../Middlewares/catchAsyncError.js";
 import database from "../Database/db.js";
-import { generatePaymentIntent } from "../Utils/generatePaymentIntent.js";
+import { generateOrderEmailTemplate } from "../Utils/generateOrderEmailTemplate.js";
+import { sendEmail } from "../Utils/sendEmail.js";
+// import { generatePaymentIntent } from "../Utils/generatePaymentIntent.js";
 
 export const placeNewOrder = catchAsyncErrors(async (req, res, next) => {
   const {
@@ -11,6 +13,7 @@ export const placeNewOrder = catchAsyncErrors(async (req, res, next) => {
     country,
     address,
     pincode,
+    user_email,
     phone,
     orderedItems,
   } = req.body;
@@ -19,7 +22,7 @@ export const placeNewOrder = catchAsyncErrors(async (req, res, next) => {
     !state ||
     !city ||
     !country ||
-    !address ||
+    !address || 
     !pincode ||
     !phone
   ) {
@@ -36,7 +39,7 @@ export const placeNewOrder = catchAsyncErrors(async (req, res, next) => {
     return next(new ErrorHandler("No items in cart.", 400));
   }
   const productIds = items.map((item) => item.product.id);
-  const { rows: products } = await database.query(
+  const products = await database.query(
     `SELECT id, price, stock, name FROM products WHERE id = ANY($1::uuid[])`,
     [productIds]
   );
@@ -71,7 +74,7 @@ export const placeNewOrder = catchAsyncErrors(async (req, res, next) => {
       product.id,
       item.quantity,
       product.price,
-      item.product.images[0].url || "",
+      item.product?.images[0]?.url || "",
       product.name
     );
 
@@ -84,8 +87,8 @@ export const placeNewOrder = catchAsyncErrors(async (req, res, next) => {
     );
   });
 
-  const tax_price = 0.18;
-  const shipping_price = total_price >= 50 ? 0 : 2;
+  const tax_price = 0.005;
+  const shipping_price = total_price >= 5000 ? 0 : 250;
   total_price = Math.round(
     total_price + total_price * tax_price + shipping_price
   );
@@ -95,7 +98,7 @@ export const placeNewOrder = catchAsyncErrors(async (req, res, next) => {
     [req.user.id, total_price, tax_price, shipping_price]
   );
 
-  const orderId = orderResult.rows[0].id;
+  const orderId = orderResult[0].id;
 
   for (let i = 0; i < values.length; i += 6) {
     values[i] = orderId;
@@ -117,16 +120,56 @@ export const placeNewOrder = catchAsyncErrors(async (req, res, next) => {
     [orderId, full_name, state, city, country, address, pincode, phone]
   );
 
-  const paymentResponse = await generatePaymentIntent(orderId, total_price);
+  // const paymentResponse = await generatePaymentIntent(orderId, total_price);
 
-  if (!paymentResponse.success) {
-    return next(new ErrorHandler("Payment failed. Try again.", 500));
+  // if (!paymentResponse.success) {
+  //   return next(new ErrorHandler("Payment failed. Try again.", 500));
+  // }
+  for (const item of items) {
+  await database.query(
+    `UPDATE products SET stock = stock - $1 WHERE id = $2`,
+    [item.quantity, item.product.id]
+  );
+}
+
+const storeOwnerEmail = process.env.STORE_OWNER_EMAIL; // add in .env file
+
+  // ✅ 3. Generate Email Templates
+  const userMessage = `
+    <h2>Order Confirmation</h2>
+    <p>Hi ${full_name || "Customer"},</p>
+    <p>Thank you for your order! Your order has been placed successfully.</p>
+    <p><strong>Order ID:</strong> ${orderId}</p>
+    <p><strong>Total Amount:</strong> Rs. ${total_price} PKR</p>
+    <br/>
+    <p>— Team ShopMate</p>
+  `;
+
+  const ownerMessage = generateOrderEmailTemplate(items, full_name, user_email, orderId, total_price, address, city, state, country, pincode, phone);
+
+  // ✅ 4. Send Emails
+  try {
+    // User confirmation email
+    await sendEmail({
+      email: user_email,
+      subject: "ShopMate - Order Confirmation",
+      message: userMessage,
+    });
+
+    // Store owner notification
+    await sendEmail({
+      email: storeOwnerEmail,
+      subject: `ShopMate - New Order Received`,
+      message: ownerMessage,
+    });
+  } catch (error) {
+    console.error("Error sending emails:", error);
   }
 
   res.status(200).json({
     success: true,
-    message: "Order placed successfully. Please proceed to payment.",
-    paymentIntent: paymentResponse.clientSecret,
+    message: "Order placed successfully.",
+    // paymentIntent: paymentResponse.clientSecret,
     total_price,
   });
 });
@@ -142,6 +185,7 @@ export const fetchSingleOrder = catchAsyncErrors(async (req, res, next) => {
 json_build_object(
 'order_item_id', oi.id,
 'order_id', oi.order_id,
+'name', oi.title,
 'product_id', oi.product_id,
 'quantity', oi.quantity,
 'price', oi.price
@@ -169,12 +213,45 @@ GROUP BY o.id, s.id;
   res.status(200).json({
     success: true,
     message: "Order fetched.",
-    orders: result.rows[0],
+    orders: result[0],
   });
 });
 
 export const fetchMyOrders = catchAsyncErrors(async (req, res, next) => {
-  const result = await database.query(
+//   const result = await database.query(
+//     `
+//         SELECT o.*, COALESCE(
+//  json_agg(
+//   json_build_object(
+//  'order_item_id', oi.id,
+//  'order_id', oi.order_id,
+//  'product_id', oi.product_id,
+//  'quantity', oi.quantity,
+//  'price', oi.price,
+//  'image', oi.image,
+//  'title', oi.title
+//   ) 
+//  ) FILTER (WHERE oi.id IS NOT NULL), '[]'
+//  ) AS order_items,
+// json_build_object(
+//  'full_name', s.full_name,
+//  'state', s.state,
+//  'city', s.city,
+//  'country', s.country,
+//  'address', s.address,
+//  'pincode', s.pincode,
+//  'phone', s.phone
+//  ) AS shipping_info 
+//  FROM orders o
+//  LEFT JOIN order_items oi ON o.id = oi.order_id
+//  LEFT JOIN shipping_info s ON o.id = s.order_id
+// WHERE o.buyer_id = $1 AND o.paid_at IS NOT NULL
+// GROUP BY o.id, s.id
+//         `,
+//     [req.user.id]
+//   );
+
+const result = await database.query(
     `
         SELECT o.*, COALESCE(
  json_agg(
@@ -201,8 +278,7 @@ json_build_object(
  FROM orders o
  LEFT JOIN order_items oi ON o.id = oi.order_id
  LEFT JOIN shipping_info s ON o.id = s.order_id
-WHERE o.buyer_id = $1 AND o.paid_at IS NOT NULL
-GROUP BY o.id, s.id
+WHERE o.buyer_id = $1 GROUP BY o.id, s.id
         `,
     [req.user.id]
   );
@@ -210,12 +286,40 @@ GROUP BY o.id, s.id
   res.status(200).json({
     success: true,
     message: "All your orders are fetched.",
-    myOrders: result.rows,
+    myOrders: result,
   });
 });
 
 export const fetchAllOrders = catchAsyncErrors(async (req, res, next) => {
-  const result = await database.query(`
+//   const result = await database.query(`
+//             SELECT o.*,
+//  COALESCE(json_agg(
+//  json_build_object(
+//  'order_item_id', oi.id,
+//  'order_id', oi.order_id,
+//  'product_id', oi.product_id,
+//  'quantity', oi.quantity,
+//  'price', oi.price,
+//  'image', oi.image,
+//  'title', oi.title
+// )
+// ) FILTER (WHERE oi.id IS NOT NULL), '[]' ) AS order_items, json_build_object(
+// 'full_name', s.full_name,
+//  'state', s.state,
+//  'city', s.city,
+//  'country', s.country,
+//  'address', s.address,
+//  'pincode', s.pincode,
+//  'phone', s.phone 
+// ) AS shipping_info
+// FROM orders o
+// LEFT JOIN order_items oi ON o.id = oi.order_id
+// LEFT JOIN shipping_info s ON o.id = s.order_id
+// WHERE o.paid_at IS NOT NULL
+// GROUP BY o.id, s.id
+//         `);
+
+const result = await database.query(`
             SELECT o.*,
  COALESCE(json_agg(
  json_build_object(
@@ -239,14 +343,13 @@ export const fetchAllOrders = catchAsyncErrors(async (req, res, next) => {
 FROM orders o
 LEFT JOIN order_items oi ON o.id = oi.order_id
 LEFT JOIN shipping_info s ON o.id = s.order_id
-WHERE o.paid_at IS NOT NULL
 GROUP BY o.id, s.id
         `);
 
   res.status(200).json({
     success: true,
     message: "All orders fetched.",
-    orders: result.rows,
+    orders: result,
   });
 });
 
@@ -263,7 +366,7 @@ export const updateOrderStatus = catchAsyncErrors(async (req, res, next) => {
     [orderId]
   );
 
-  if (results.rows.length === 0) {
+  if (results.length === 0) {
     return next(new ErrorHandler("Invalid order ID.", 404));
   }
 
@@ -277,7 +380,7 @@ export const updateOrderStatus = catchAsyncErrors(async (req, res, next) => {
   res.status(200).json({
     success: true,
     message: "Order status updated.",
-    updatedOrder: updatedOrder.rows[0],
+    updatedOrder: updatedOrder[0],
   });
 });
 
@@ -289,13 +392,13 @@ export const deleteOrder = catchAsyncErrors(async (req, res, next) => {
         `,
     [orderId]
   );
-  if (results.rows.length === 0) {
+  if (results.length === 0) {
     return next(new ErrorHandler("Invalid order ID.", 404));
   }
 
   res.status(200).json({
     success: true,
     message: "Order deleted.",
-    order: results.rows[0],
+    order: results[0],
   });
 });

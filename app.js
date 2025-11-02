@@ -7,6 +7,8 @@ import { createTables } from './Utils/createTables.js';
 import { errorMiddleware } from './Middlewares/errorMiddleware.js';
 import router from './Router/authRoutes.js';
 import productRouter from './Router/productRoutes.js';
+import adminRouter from './Router/adminRoutes.js';
+import orderRouter from './Router/orderRoutes.js';
 
 const app = express();
 config({ path: "./.env" })
@@ -30,6 +32,8 @@ app.use(
 
 app.use("/api/v1/auth", router)
 app.use("/api/v1/product", productRouter)
+app.use("/api/v1/admin", adminRouter)
+app.use("/api/v1/order", orderRouter)
 
 createTables()
 
