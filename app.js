@@ -14,10 +14,9 @@ const app = express();
 config({ path: "./.env" })
 
 app.use(cors({
-    origin: "*",
+    origin: [process.env.FRONTEND_URL],
     methods: ["GET", "POST", "PUT", "DELETE"],
-    credentials: true,
-    allowedHeaders: ["Content-Type", "Authorization"],
+    credentials: true, 
 }))
 
 app.use(cookieParser())
