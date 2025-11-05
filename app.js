@@ -14,11 +14,10 @@ const app = express();
 config({ path: "./.env" })
 
 app.use(cors({
-    origin: [process.env.FRONTEND_URL],
+    origin: ["https://e-commerce-frontend-khaki-omega.vercel.app"],
     methods: ["GET", "POST", "PUT", "DELETE"],
     credentials: true,
 }))
-app.options("*", cors());
 
 app.use(cookieParser())
 app.use(express.json())
