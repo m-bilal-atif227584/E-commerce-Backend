@@ -19,19 +19,6 @@ app.use(cors({
     credentials: true, 
 }))
 
-app.use((req, res, next) => {
-  res.header("Access-Control-Allow-Origin", "https://e-commerce-frontend-khaki-omega.vercel.app");
-  res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-  res.header("Access-Control-Allow-Headers", "Content-Type, X-Auth-Token, Origin, Authorization");
-
-  // ✅ Handle preflight (OPTIONS) requests
-  if (req.method === "OPTIONS") {
-    return res.sendStatus(200);
-  }
-
-  next();
-});
-
 app.use(cookieParser())
 app.use(express.json())
 app.use(express.urlencoded({ extended: true }))
