@@ -14,7 +14,7 @@ const app = express();
 config({ path: "./.env" })
 
 app.use(cors({
-    origin: ["https://e-commerce-frontend-khaki-omega.vercel.app"],
+    origin: [process.env.FRONTEND_URL],
     methods: ["GET", "POST", "PUT", "DELETE"],
     credentials: true,
 }))
